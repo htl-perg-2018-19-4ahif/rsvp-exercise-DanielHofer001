@@ -1,43 +1,70 @@
-import {CREATED, BAD_REQUEST, UNAUTHORIZED} from 'http-status-codes';
-import * as loki from 'lokijs';
 import * as express from 'express';
-import * as basic from 'express-basic-auth';
+import 'express-basic-auth';
+import { request } from 'http';
+import expressBasicAuth = require('express-basic-auth');
 
-var app = express();
-app.use(express.json());
+let people: Guest[] = [];
+let MAX_PEOPLE: Number = 10;
+var server = express();
+server.use(express.json());
+const adminFilter = expressBasicAuth({ users: { admin: 'P@ssw0rd!' }});
 
-const adminFilter = basic({ users: { admin: 'P@ssw0rd!' }});
-
-const db = new loki(__dirname + '/db.dat', {autosave: true, autoload: true});
-let guests = db.getCollection('guests');
-if (!guests) {
-  guests = db.addCollection('guests');
-}
-
-app.get('/guests', adminFilter, (req, res) => {
-  res.send(guests.find());
-});
-
-app.get('/party', (req, res, next) => {
-  res.send({
-    title: 'Happy new year!',
-    location: 'At my home',
-    date: new Date(2017, 0, 1)
-  });
-});
-
-app.post('/register', (req, res, next) => {
-  if (!req.body.firstName || !req.body.lastName) {
-    res.status(BAD_REQUEST).send('Missing mandatory member(s)');
-  } else {
-    const count = guests.count();
-    if (count < 10) {
-      const newDoc = guests.insert({firstName: req.body.firstName, lastName: req.body.lastName});
-      res.status(CREATED).send(newDoc);
-    } else {
-      res.status(UNAUTHORIZED).send('Sorry, max. number of guests already reached');
-    }
+//server receives request(/register) from client and sends response
+server.post('/register', (request, response) => {
+  let firstName = request.body.firstName;
+  let lastName = request.body.lastName;
+  if (firstName == null || lastName == null) {
+    response.status(400);
+    response.send(`{Bad Request - no Name sent}`);
   }
+  else if (people.length < MAX_PEOPLE) {
+    people.push(new Guest(firstName, lastName));
+    response.send({
+      response: `Thank you for registering at my party, 
+    ${request.body.firstName} ${request.body.lastName}`
+    });
+  } else {
+    response.send({ response: `Sorry guy, there are already ${MAX_PEOPLE} people at my party` });
+  }
+
 });
 
-app.listen(8080, () => console.log('API is listening'));
+const port = 8080;
+server.listen(port, function () {
+  console.log(`API is listening on port ${port}`);
+});
+
+//server.use(expressBasicAuth( { authorizer: adminFilter } ))
+
+server.get('/guests',adminFilter, (request, response) => {
+
+    let ret: string = "";
+    for (let i = 0; i < people.length; i++) {
+      ret += people[i] + '\n';
+    }
+
+    response.send(`People registered at my party are: \n${ret}`);
+ 
+  
+
+});
+server.get('/party', (request, response) => {
+  response.send({
+    name: 'The future is now',
+    location: 'Somewhere',
+    date: new Date()
+  });
+
+});
+class Guest {
+
+  firstName: string;
+  lastName: string;
+  constructor(firstName: string, lastName: string) {
+    this.firstName = firstName;
+    this.lastName = lastName;
+  }
+  toString() {
+    return `${this.firstName} ${this.lastName}`
+  }
+}
